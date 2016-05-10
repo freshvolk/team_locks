@@ -21,15 +21,15 @@ defmodule Caniuse.ProjectChannel do
     end
   end
 
-  def handle_in("lock:resource:" <> resource_name, _payload, socket) do
-    changeset = Resource.changeset(Caniuse.Repo.get_by(Resource, name: resource_name), %{"is_locked" => true})
+  def handle_in("lock:resource:" <> resource_name, payload, socket) do
+    changeset = Resource.changeset(Caniuse.Repo.get_by(Resource, name: resource_name), payload)
     {:ok, resource} = Caniuse.Repo.update(changeset)
     broadcast socket, "update",  resource_to_map(resource)
     {:noreply, socket}
   end
 
-  def handle_in("unlock:resource:" <> resource_name, _payload, socket) do
-    changeset = Resource.changeset(Caniuse.Repo.get_by(Resource, name: resource_name), %{"is_locked" => false})
+  def handle_in("unlock:resource:" <> resource_name, payload, socket) do
+    changeset = Resource.changeset(Caniuse.Repo.get_by(Resource, name: resource_name), payload)
     {:ok, resource} = Caniuse.Repo.update(changeset)
     broadcast socket, "update",  resource_to_map(resource)
     {:noreply, socket}

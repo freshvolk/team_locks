@@ -59,35 +59,47 @@ let save_resource = function(resource) {
       if (local_list) {
          resource_list = JSON.parse(local_list)
       }
-      resource_list.push(resource)
+      if (resource_list.indexOf(resource) == -1)
+          resource_list.push(resource)
       localStorage.setItem('locks_on_locks', JSON.stringify(resource_list))
    }
 }
+
+let username = localStorage.getItem('locker')
 
 // Now that you are connected, you can join channels with a topic:
 let join_channel = function(resource) {
    save_resource(resource)
    let lock_list = $('#locks').find('tbody')
-   lock_list.append('<tr><td class="name">'+resource+'</td><td id="lock'+resource+'" class="locked">Locked</td><td><button id="changer'+resource+'">Change State</button></td></tr>')
+   lock_list.append(
+           $('<tr>')
+           .append($('<td>').attr('id', 'name'+resource).text(resource))
+           .append($('<td>').attr('id', 'lock'+resource).addClass("locked").text('Locked'))
+           .append($('<td>').attr('id', 'lockby'+resource))
+           .append($('<td>').attr('id', 'updated'+resource))
+           .append($('<td>').append($('<button>').attr('id', 'changer'+resource).addClass("pure-button").text('Change State')))
+           )
 
 
    let channel = socket.channel("project:" + resource, {})
    channel.join()
-     .receive("ok", resp => { console.log("Joined successfully", resp); change_state(resp.is_locked) })
+     .receive("ok", resp => { console.log("Joined successfully", resp); change_state(resp) })
      .receive("error", resp => { console.log("Unable to join", resp) })
 
    let acquire_lock = function() {
-      channel.push("lock:resource:"+resource, {})
+      channel.push("lock:resource:"+resource, {is_locked: true, changed_by: username})
    }
 
    let release_lock = function() {
-      channel.push("unlock:resource:"+resource, {})
+      channel.push("unlock:resource:"+resource, {is_locked: false, changed_by: username})
    }
 
-   let change_state = function(new_state) {
+   let change_state = function(resource_state) {
       let lock = $('#lock'+resource)
+      let by = $('#lockby'+resource)
+      let updated = $('#updated'+resource)
       let butt = $('#changer'+resource)
-      if (new_state) {
+      if (resource_state.is_locked) {
          lock.className = "locked"
          lock.text(" Locked")
          lock.attr("class","locked")
@@ -102,20 +114,36 @@ let join_channel = function(resource) {
          butt.on('click', acquire_lock)
          butt.text("Acquire Lock")
       }
+      by.text(resource_state.changed_by)
+      let changed = resource_state.updated_at || new Date()
+      updated.text(new Date(changed).toLocaleString())
    }
-   channel.on("update", payload => { console.log(payload); change_state(payload.is_locked) })
+   channel.on("update", payload => { console.log(payload); change_state(payload) })
 }
 
 $('#add_resource').on('click', function() {
-   join_channel($('#new_resource').val())
+   join_channel($('#new_resource').val(), true)
    $('#new_resource').val('')
 })
 
-if (localStorage && localStorage.getItem('locks_on_locks')) {
-   let resources = JSON.parse(localStorage.getItem('locks_on_locks'))
-   resources.forEach(function(resource) {
-      join_channel(resource)
-   })
+$('#set_name').on('click', function() {
+    username = $('#username').val()
+    localStorage.setItem('locker', username)
+    $('#set_name').text('Username Set')
+})
+
+$('#username').on('change', function() {
+    $('#set_name').text('Change Username')
+})
+
+if (localStorage) {
+   if (localStorage.getItem('locks_on_locks')) {
+      let resources = JSON.parse(localStorage.getItem('locks_on_locks'))
+      resources.forEach(resource => { join_channel(resource) })
+   } else {
+      let default_resources = ['terraform_staging', 'circle_staging', 'github_staging', 'artifactory_staging']
+      default_resources.forEach(resource => {join_channel(resource)})
+   }
 }
 
 export default socket
